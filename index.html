@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="판매장부">
+<meta name="theme-color" content="#1D9E75">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>판매장부</title>
+<style>
+  :root {
+    --c-sales: #1D9E75;
+    --c-purchase: #D85A30;
+    --c-other: #BA7517;
+    --c-bg: #F5F5F7;
+    --c-card: #FFFFFF;
+    --c-border: #E5E5EA;
+    --c-text: #1A1A1A;
+    --c-text-sub: #6E6E73;
+    --c-text-dim: #9A9AA0;
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", Roboto, sans-serif;
+    background: var(--c-bg);
+    color: var(--c-text);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    height: 100vh;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--c-bg);
+    position: relative;
+    overflow: hidden;
+  }
+  [hidden] { display: none !important; }
+
+  /* TOPBAR */
+  .topbar {
+    padding: calc(var(--safe-top) + 12px) 16px 12px;
+    background: linear-gradient(135deg, #1D9E75 0%, #138a5f 100%);
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .topbar-title { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+  .topbar-date { font-size: 12px; opacity: 0.85; margin-bottom: 12px; }
+  .topbar-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .summary-item { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 8px; }
+  .summary-label { font-size: 10px; opacity: 0.85; margin-bottom: 2px; }
+  .summary-value { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* CONTENT */
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 12px 12px calc(var(--safe-bottom) + 76px);
+  }
+  .tab { display: none; }
+  .tab.active { display: block; }
+
+  /* CARD */
+  .card {
+    background: var(--c-card);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--c-text-sub); margin-bottom: 10px; }
+
+  /* MIC */
+  .mic-wrap { display: flex; flex-direction: column; align-items: center; padding: 24px 0 16px; }
+  .mic-btn {
+    width: 130px; height: 130px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1D9E75 0%, #138a5f 100%);
+    border: none; color: #fff; font-size: 52px; cursor: pointer;
+    position: relative;
+    box-shadow: 0 6px 16px rgba(29,158,117,0.35);
+    transition: transform 0.15s;
+  }
+  .mic-btn:active { transform: scale(0.95); }
+  .mic-btn:disabled { background: #B5B5BA; box-shadow: none; cursor: not-allowed; }
+  .mic-btn.recording {
+    background: linear-gradient(135deg, #D85A30 0%, #b54a26 100%);
+    box-shadow: 0 6px 16px rgba(216,90,48,0.45);
+  }
+  .mic-btn.recording::before, .mic-btn.recording::after {
+    content: ''; position: absolute; inset: -8px; border-radius: 50%;
+    border: 3px solid rgba(216,90,48,0.55);
+    animation: ripple 1.4s ease-out infinite;
+  }
+  .mic-btn.recording::after { animation-delay: 0.7s; }
+  @keyframes ripple {
+    0% { transform: scale(0.9); opacity: 1; }
+    100% { transform: scale(1.7); opacity: 0; }
+  }
+  .mic-hint { margin-top: 14px; font-size: 12px; color: var(--c-text-sub); text-align: center; min-height: 18px; }
+  .mic-interim {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background: #F0F0F2;
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--c-text-sub);
+    text-align: center;
+    min-height: 32px;
+    width: 100%;
+    word-break: break-word;
+  }
+  .mic-interim:empty::before {
+    content: '예: "사과 5박스 30만원에 들여왔어"';
+    color: var(--c-text-dim);
+  }
+
+  /* STEP NAV */
+  .step-nav {
+    display: flex;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--c-text-dim);
+    margin-bottom: 8px;
+    align-items: center;
+  }
+  .step-dot {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--c-border);
+    color: #fff;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center; justify-content: center;
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+  .step-dot.active { background: var(--c-sales); }
+  .step-arrow { color: var(--c-text-dim); font-size: 10px; }
+
+  /* TRANSCRIPT */
+  .transcript-edit {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+    background: var(--c-card);
+    color: var(--c-text);
+    resize: vertical;
+    font-family: inherit;
+    min-height: 80px;
+  }
+  .transcript-edit:focus { outline: none; border-color: var(--c-sales); }
+  .ai-status {
+    font-size: 11px;
+    color: var(--c-text-sub);
+    text-align: center;
+    min-height: 16px;
+    margin: 8px 0;
+  }
+  .ai-status.error { color: var(--c-purchase); }
+  .ai-status.ok { color: var(--c-sales); }
+
+  /* TYPE BUTTONS */
+  .type-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .type-row.mini { gap: 4px; margin-bottom: 8px; }
+  .type-btn {
+    padding: 8px 6px;
+    border-radius: 8px;
+    border: 2px solid var(--c-border);
+    background: var(--c-card);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--c-text-sub);
+    cursor: pointer;
+    transition: all 0.12s;
+  }
+  .type-row.mini .type-btn { padding: 6px 4px; font-size: 11px; }
+  .type-btn[data-type="sales"].active, .type-btn[data-card-type="sales"].active {
+    background: var(--c-sales); border-color: var(--c-sales); color: #fff;
+  }
+  .type-btn[data-type="purchase"].active, .type-btn[data-card-type="purchase"].active {
+    background: var(--c-purchase); border-color: var(--c-purchase); color: #fff;
+  }
+  .type-btn[data-type="other"].active, .type-btn[data-card-type="other"].active {
+    background: var(--c-other); border-color: var(--c-other); color: #fff;
+  }
+
+  /* FORM */
+  .field-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .field-label { font-size: 11px; color: var(--c-text-sub); font-weight: 600; }
+  .field-input {
+    width: 100%;
+    padding: 9px 11px;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    font-size: 14px;
+    background: var(--c-card);
+    -webkit-appearance: none;
+    color: var(--c-text);
+  }
+  .field-input:focus { outline: none; border-color: var(--c-sales); }
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  select.field-input { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M0 0l5 6 5-6z' fill='%236E6E73'/></svg>"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 28px; }
+
+  /* BUTTONS */
+  .submit-btn {
+    width: 100%;
+    padding: 13px;
+    background: var(--c-sales);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  .submit-btn:active { opacity: 0.85; }
+  .submit-btn:disabled { background: #B5B5BA; cursor: not-allowed; }
+  .ghost-btn {
+    width: 100%;
+    padding: 11px;
+    background: var(--c-card);
+    color: var(--c-text-sub);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .ghost-btn.small { width: auto; padding: 6px 12px; font-size: 11px; }
+  .btn-row { display: flex; gap: 8px; }
+  .btn-row > * { flex: 1; }
+
+  /* TRANSACTION CARD (step 3) */
+  .trans-card {
+    background: var(--c-card);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--c-sales);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .trans-card[data-type="purchase"] { border-left-color: var(--c-purchase); }
+  .trans-card[data-type="other"] { border-left-color: var(--c-other); }
+  .trans-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 8px;
+  }
+  .trans-card-head .type-row { flex: 1; margin-bottom: 0; }
+  .card-del-btn {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: #F0F0F2;
+    border: none;
+    color: var(--c-text-sub);
+    cursor: pointer;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .trans-card .field-grid { margin-bottom: 8px; }
+  .trans-card input.field-input { padding: 8px 10px; font-size: 13px; }
+  .card-save-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--c-sales);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  .trans-card[data-type="purchase"] .card-save-btn { background: var(--c-purchase); }
+  .trans-card[data-type="other"] .card-save-btn { background: var(--c-other); }
+
+  .step3-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 4px 8px;
+  }
+  .step3-actions {
+    position: sticky;
+    bottom: 0;
+    margin: 4px -4px 0;
+    padding: 8px 4px;
+    background: linear-gradient(to top, var(--c-bg) 70%, transparent);
+  }
+
+  /* FILTER */
+  .filter-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .filter-row::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    flex-shrink: 0;
+    padding: 7px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--c-border);
+    background: var(--c-card);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--c-text-sub);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .filter-chip.active { background: var(--c-text); border-color: var(--c-text); color: #fff; }
+
+  /* RECORD */
+  .record {
+    background: var(--c-card);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .record-left { flex: 1; min-width: 0; }
+  .record-title {
+    font-size: 14px; font-weight: 600; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .record-tag {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 700; color: #fff;
+  }
+  .record-tag.sales { background: var(--c-sales); }
+  .record-tag.purchase { background: var(--c-purchase); }
+  .record-tag.other { background: var(--c-other); }
+  .record-meta { font-size: 11px; color: var(--c-text-sub); }
+  .record-memo { font-size: 11px; color: var(--c-text-dim); margin-top: 2px; word-break: break-word; }
+  .record-right { text-align: right; flex-shrink: 0; }
+  .record-amount { font-size: 15px; font-weight: 700; white-space: nowrap; }
+  .record-amount.sales { color: var(--c-sales); }
+  .record-amount.purchase { color: var(--c-purchase); }
+  .record-amount.other { color: var(--c-other); }
+  .record-del {
+    background: none; border: none;
+    color: var(--c-text-dim); font-size: 11px; cursor: pointer;
+    margin-top: 4px; padding: 4px 6px;
+  }
+
+  .empty {
+    text-align: center; color: var(--c-text-dim);
+    font-size: 13px; padding: 40px 0;
+  }
+
+  /* STATS */
+  .stat-tabs {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 4px; margin-bottom: 10px;
+    background: var(--c-card); padding: 4px; border-radius: 10px;
+  }
+  .stat-tab {
+    padding: 7px 4px; border-radius: 7px;
+    background: transparent; border: none;
+    font-size: 12px; font-weight: 600;
+    color: var(--c-text-sub); cursor: pointer;
+  }
+  .stat-tab.active { background: var(--c-text); color: #fff; }
+
+  .stat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .stat-card { background: var(--c-card); border-radius: 10px; padding: 12px; }
+  .stat-card-label { font-size: 11px; color: var(--c-text-sub); margin-bottom: 4px; }
+  .stat-card-value { font-size: 17px; font-weight: 700; }
+  .stat-card-value.sales { color: var(--c-sales); }
+  .stat-card-value.purchase { color: var(--c-purchase); }
+  .stat-card-value.profit-pos { color: var(--c-sales); }
+  .stat-card-value.profit-neg { color: var(--c-purchase); }
+
+  table.daily { width: 100%; font-size: 11px; border-collapse: collapse; }
+  table.daily th, table.daily td {
+    padding: 6px 4px; text-align: right;
+    border-bottom: 1px solid var(--c-border);
+  }
+  table.daily th { font-weight: 600; color: var(--c-text-sub); }
+  table.daily td.date { text-align: left; color: var(--c-text-sub); }
+  table.daily td.sales { color: var(--c-sales); font-weight: 600; }
+  table.daily td.purchase { color: var(--c-purchase); font-weight: 600; }
+  table.daily td.profit-pos { color: var(--c-sales); font-weight: 700; }
+  table.daily td.profit-neg { color: var(--c-purchase); font-weight: 700; }
+
+  .barchart {
+    display: flex; align-items: flex-end; gap: 4px;
+    height: 140px; padding: 6px 4px 26px; position: relative;
+  }
+  .bar-col {
+    flex: 1; height: 100%;
+    display: flex; align-items: flex-end; justify-content: center;
+    position: relative;
+  }
+  .bar-stack {
+    display: flex; flex-direction: row; align-items: flex-end;
+    gap: 1px; width: 100%; height: 100%;
+  }
+  .bar { flex: 1; min-height: 1px; border-radius: 2px 2px 0 0; }
+  .bar-label {
+    position: absolute; bottom: -20px;
+    font-size: 9px; color: var(--c-text-sub); white-space: nowrap;
+  }
+  .legend {
+    display: flex; gap: 14px; justify-content: center;
+    font-size: 11px; color: var(--c-text-sub); margin-top: 8px;
+  }
+  .legend-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 2px; margin-right: 4px; vertical-align: middle;
+  }
+
+  .item-row {
+    display: grid; grid-template-columns: 1.1fr 0.9fr 0.9fr 1fr;
+    gap: 6px; padding: 8px 0;
+    font-size: 11px; border-bottom: 1px solid var(--c-border);
+    align-items: center;
+  }
+  .item-row.head { color: var(--c-text-sub); font-weight: 600; border-bottom: 2px solid var(--c-border); }
+  .item-row .name { font-weight: 600; color: var(--c-text); font-size: 12px; word-break: break-word; }
+  .item-row .right { text-align: right; }
+  .margin-bar { height: 5px; background: #EEE; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .margin-fill { height: 100%; background: var(--c-sales); }
+  .margin-fill.neg { background: var(--c-purchase); }
+
+  .other-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 0; border-bottom: 1px solid var(--c-border); gap: 10px;
+  }
+  .other-row:last-child { border-bottom: none; }
+  .other-row-left { flex: 1; min-width: 0; }
+  .other-name { font-size: 13px; font-weight: 600; word-break: break-word; }
+  .other-pct-bar { height: 4px; background: #EEE; border-radius: 2px; margin-top: 4px; overflow: hidden; }
+  .other-pct-fill { height: 100%; background: var(--c-other); }
+  .other-amount { font-size: 14px; font-weight: 700; color: var(--c-other); white-space: nowrap; }
+  .other-pct { font-size: 10px; color: var(--c-text-sub); }
+
+  /* BOTTOMNAV */
+  .bottomnav {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--c-card); border-top: 1px solid var(--c-border);
+    padding-bottom: var(--safe-bottom);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+  }
+  .navbtn {
+    background: none; border: none; padding: 10px 4px;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    cursor: pointer; color: var(--c-text-dim);
+  }
+  .navbtn.active { color: var(--c-sales); }
+  .navbtn .nav-icon { font-size: 18px; line-height: 1; }
+  .navbtn .nav-label { font-size: 10px; font-weight: 600; }
+
+  /* SETTINGS */
+  .danger-btn {
+    width: 100%; padding: 12px;
+    background: #fff; color: var(--c-purchase);
+    border: 1px solid var(--c-purchase); border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 8px;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.85); color: #fff;
+    padding: 10px 16px; border-radius: 20px;
+    font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; z-index: 100; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="topbar-title">판매장부</div>
+    <div class="topbar-date" id="topbarDate"></div>
+    <div class="topbar-summary">
+      <div class="summary-item">
+        <div class="summary-label">오늘 매출</div>
+        <div class="summary-value" id="sumSales">₩0</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">오늘 매입</div>
+        <div class="summary-value" id="sumPurchase">₩0</div>
+      </div>
+      <div class="summary-item">
+        <div class="summary-label">순이익</div>
+        <div class="summary-value" id="sumProfit">₩0</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- =============== INPUT TAB =============== -->
+    <section class="tab active" id="tab-input">
+      <div class="step-nav">
+        <span class="step-dot" id="stepDot1">1</span>
+        <span>듣기</span>
+        <span class="step-arrow">›</span>
+        <span class="step-dot" id="stepDot2">2</span>
+        <span>확인</span>
+        <span class="step-arrow">›</span>
+        <span class="step-dot" id="stepDot3">3</span>
+        <span>저장</span>
+      </div>
+
+      <!-- STEP 1: LISTEN -->
+      <div id="step1">
+        <div class="card">
+          <div class="mic-wrap">
+            <button class="mic-btn" id="micBtn" aria-label="음성 녹음">🎤</button>
+            <div class="mic-hint" id="micHint">버튼을 눌러 음성 입력</div>
+            <div class="mic-interim" id="micInterim"></div>
+          </div>
+        </div>
+        <div class="card">
+          <button class="ghost-btn" id="manualStartBtn">⌨️ 직접 입력으로 시작</button>
+        </div>
+      </div>
+
+      <!-- STEP 2: REVIEW -->
+      <div id="step2" hidden>
+        <div class="card">
+          <div class="card-title">2. 인식 결과 확인 (편집 가능)</div>
+          <textarea class="transcript-edit" id="transcriptEdit" rows="4" placeholder="여기서 인식 오류를 수정한 뒤 AI 분석을 누르세요"></textarea>
+          <div class="ai-status" id="aiStatus"></div>
+          <button class="submit-btn" id="analyzeBtn">🤖 AI 분석으로 자동 채우기</button>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="ghost-btn" id="reRecordBtn">🎤 다시 듣기</button>
+            <button class="ghost-btn" id="skipAIBtn">AI 없이 직접 입력</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3: CONFIRM CARDS -->
+      <div id="step3" hidden>
+        <div class="step3-header">
+          <div class="card-title" style="margin-bottom:0">3. 거래 확인 · <span id="cardCount">0</span>건</div>
+          <button class="ghost-btn small" id="cancelAllBtn">취소</button>
+        </div>
+        <div id="cardList"></div>
+        <div class="step3-actions">
+          <button class="submit-btn" id="saveAllBtn">모두 저장</button>
+          <button class="ghost-btn" id="addEmptyCardBtn" style="margin-top:6px">＋ 빈 거래 추가</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== LIST TAB =============== -->
+    <section class="tab" id="tab-list">
+      <div class="filter-row" id="filterRow">
+        <button class="filter-chip active" data-filter="all">전체</button>
+        <button class="filter-chip" data-filter="sales">매출</button>
+        <button class="filter-chip" data-filter="purchase">매입</button>
+        <button class="filter-chip" data-filter="other">기타비용</button>
+      </div>
+      <div id="recordList"></div>
+    </section>
+
+    <!-- =============== STATS TAB =============== -->
+    <section class="tab" id="tab-stats">
+      <div class="stat-tabs">
+        <button class="stat-tab active" data-view="daily">일별</button>
+        <button class="stat-tab" data-view="monthly">월별</button>
+        <button class="stat-tab" data-view="item">품목별</button>
+        <button class="stat-tab" data-view="other">기타비용</button>
+      </div>
+      <div id="statContent"></div>
+    </section>
+
+    <!-- =============== SETTINGS TAB =============== -->
+    <section class="tab" id="tab-settings">
+      <div class="card">
+        <div class="card-title">Anthropic API 키</div>
+        <div class="field-row">
+          <input class="field-input" id="apiKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off">
+        </div>
+        <button class="submit-btn" id="saveKey">저장</button>
+        <div style="font-size:11px;color:var(--c-text-sub);margin-top:8px;line-height:1.5">
+          API 키는 이 기기 localStorage에만 저장되며 직접 Anthropic API를 호출합니다.<br>
+          키가 없어도 수동 입력 모드로 사용 가능합니다.
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">AI 모델</div>
+        <div class="field-row">
+          <select class="field-input" id="modelSelect">
+            <option value="claude-sonnet-4-5">claude-sonnet-4-5 (기본)</option>
+            <option value="claude-sonnet-4-6">claude-sonnet-4-6 (최신)</option>
+            <option value="claude-sonnet-4-20250514">claude-sonnet-4-20250514</option>
+            <option value="__custom__">직접 입력</option>
+          </select>
+          <input class="field-input" id="modelCustom" type="text" placeholder="모델 ID 직접 입력" hidden>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">데이터</div>
+        <div style="font-size:12px;color:var(--c-text-sub);margin-bottom:8px">
+          <span id="dataCount">0건</span> 저장됨
+        </div>
+        <button class="submit-btn" id="exportBtn" style="background:#444">내역 JSON 내보내기</button>
+        <button class="danger-btn" id="clearBtn">모든 데이터 삭제</button>
+      </div>
+
+      <div class="card">
+        <div style="font-size:11px;color:var(--c-text-dim);line-height:1.7">
+          판매장부 v2 · 음성 분석 강화<br>
+          Web Speech API + Claude tool_use<br>
+          모든 데이터는 이 기기에만 저장됩니다.
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <nav class="bottomnav">
+    <button class="navbtn active" data-tab="input">
+      <div class="nav-icon">🎤</div><div class="nav-label">음성입력</div>
+    </button>
+    <button class="navbtn" data-tab="list">
+      <div class="nav-icon">📋</div><div class="nav-label">내역</div>
+    </button>
+    <button class="navbtn" data-tab="stats">
+      <div class="nav-icon">📊</div><div class="nav-label">분석</div>
+    </button>
+    <button class="navbtn" data-tab="settings">
+      <div class="nav-icon">⚙️</div><div class="nav-label">설정</div>
+    </button>
+  </nav>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+'use strict';
+
+const STORE_KEY = 'salesApp.records';
+const KEY_STORE = 'salesApp.apiKey';
+const MODEL_STORE = 'salesApp.model';
+const DEFAULT_MODEL = 'claude-sonnet-4-5';
+
+const state = {
+  records: loadJSON(STORE_KEY, []),
+  apiKey: localStorage.getItem(KEY_STORE) || '',
+  model: localStorage.getItem(MODEL_STORE) || DEFAULT_MODEL,
+  tab: 'input',
+  statView: 'daily',
+  filter: 'all',
+  step: 1,
+  recognition: null,
+  recording: false,
+  transcript: ''
+};
+
+// ===== HELPERS =====
+function loadJSON(k, d) {
+  try { return JSON.parse(localStorage.getItem(k)) || d; } catch { return d; }
+}
+function saveRecords() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state.records));
+  const el = document.getElementById('dataCount');
+  if (el) el.textContent = state.records.length + '건';
+}
+function fmt(n) { return '₩' + Math.round(n || 0).toLocaleString('ko-KR'); }
+function fmtShort(n) {
+  n = Math.round(n || 0);
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-' : '';
+  if (abs >= 100000000) return sign + (abs/100000000).toFixed(1).replace('.0','') + '억';
+  if (abs >= 10000) return sign + (abs/10000).toFixed(1).replace('.0','') + '만';
+  return n.toLocaleString('ko-KR');
+}
+function todayStr() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function uid() { return Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
+
+// ===== TAB SWITCH =====
+function switchTab(name) {
+  state.tab = name;
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  document.querySelectorAll('.navbtn').forEach(el => {
+    el.classList.toggle('active', el.dataset.tab === name);
+  });
+  if (name === 'list') renderList();
+  if (name === 'stats') renderStats();
+  document.querySelector('.content').scrollTop = 0;
+}
+document.querySelectorAll('.navbtn').forEach(btn => {
+  btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+});
+
+// ===== STEP NAV =====
+function setStep(n) {
+  state.step = n;
+  document.getElementById('step1').hidden = n !== 1;
+  document.getElementById('step2').hidden = n !== 2;
+  document.getElementById('step3').hidden = n !== 3;
+  for (let i = 1; i <= 3; i++) {
+    document.getElementById('stepDot' + i).classList.toggle('active', i === n);
+  }
+  document.querySelector('.content').scrollTop = 0;
+  if (n === 1) {
+    document.getElementById('micInterim').textContent = '';
+    document.getElementById('aiStatus').textContent = '';
+  }
+}
+
+// ===== VOICE =====
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById('micBtn');
+const micHintEl = document.getElementById('micHint');
+const micInterimEl = document.getElementById('micInterim');
+
+if (!SR) {
+  micBtn.disabled = true;
+  micHintEl.textContent = '⚠️ 이 브라우저는 음성 인식 미지원';
+} else {
+  state.recognition = new SR();
+  state.recognition.lang = 'ko-KR';
+  state.recognition.interimResults = true;
+  state.recognition.continuous = false;
+
+  state.recognition.onstart = () => {
+    state.recording = true;
+    micBtn.classList.add('recording');
+    micHintEl.textContent = '듣는 중... 다시 누르면 종료';
+    micInterimEl.textContent = '';
+    state.transcript = '';
+  };
+  state.recognition.onresult = (e) => {
+    let interim = '', finalText = '';
+    for (let i = 0; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript;
+      else interim += r[0].transcript;
+    }
+    state.transcript = (finalText + interim).trim();
+    micInterimEl.textContent = state.transcript;
+  };
+  state.recognition.onerror = (e) => {
+    state.recording = false;
+    micBtn.classList.remove('recording');
+    micHintEl.textContent = '인식 오류: ' + e.error;
+  };
+  state.recognition.onend = () => {
+    state.recording = false;
+    micBtn.classList.remove('recording');
+    micHintEl.textContent = '버튼을 눌러 음성 입력';
+    const text = (state.transcript || '').trim();
+    if (text) {
+      document.getElementById('transcriptEdit').value = text;
+      setStep(2);
+    }
+  };
+  micBtn.addEventListener('click', () => {
+    if (state.recording) state.recognition.stop();
+    else {
+      try { state.recognition.start(); }
+      catch (e) { showToast('마이크 시작 실패: ' + e.message); }
+    }
+  });
+}
+
+// ===== STEP 1 → STEP 3 직접 (수동) =====
+document.getElementById('manualStartBtn').addEventListener('click', () => {
+  renderCards([newEmptyTransaction()]);
+  setStep(3);
+});
+
+// ===== STEP 2 BUTTONS =====
+document.getElementById('reRecordBtn').addEventListener('click', () => {
+  setStep(1);
+});
+document.getElementById('skipAIBtn').addEventListener('click', () => {
+  const text = document.getElementById('transcriptEdit').value.trim();
+  renderCards([newEmptyTransaction({ memo: text.slice(0, 30) })]);
+  setStep(3);
+});
+document.getElementById('analyzeBtn').addEventListener('click', () => {
+  const text = document.getElementById('transcriptEdit').value.trim();
+  if (!text) { showToast('인식된 텍스트가 없습니다'); return; }
+  analyzeWithAI(text);
+});
+
+// ===== VOCAB =====
+function buildVocab() {
+  const counts = { sales: {}, purchase: {}, other: {} };
+  state.records.forEach(r => {
+    if (!counts[r.type]) return;
+    counts[r.type][r.item] = (counts[r.type][r.item] || 0) + 1;
+  });
+  const top = (obj) => Object.entries(obj)
+    .sort((a,b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([k]) => k);
+  return {
+    sales: top(counts.sales),
+    purchase: top(counts.purchase),
+    other: top(counts.other)
+  };
+}
+
+function buildSystemPrompt() {
+  const vocab = buildVocab();
+  const hasVocab = vocab.sales.length || vocab.purchase.length || vocab.other.length;
+  let vocabSection = '';
+  if (hasVocab) {
+    vocabSection = `\n\n## 사용자가 자주 등록하는 품목명 (인식이 애매할 때 우선 매칭)\n`;
+    if (vocab.sales.length) vocabSection += `- 매출: ${vocab.sales.join(', ')}\n`;
+    if (vocab.purchase.length) vocabSection += `- 매입: ${vocab.purchase.join(', ')}\n`;
+    if (vocab.other.length) vocabSection += `- 기타비용: ${vocab.other.join(', ')}\n`;
+  }
+
+  return `너는 한국 소규모 판매업체의 음성 입력을 거래 데이터로 변환하는 도구야.
+사용자가 말한 한국어 문장을 분석해서 record_transaction 도구를 호출해. 거래가 여러 건이면 도구를 여러 번 호출해.
+
+## 분류 규칙 (type)
+- "sales" — 팔다 / 판매 / 매출 / 팔았어 / 매상
+- "purchase" — 사다 / 들여오다 / 매입 / 구매 / 들어왔어 / 입고
+- "other" — 그 외 비용 (임대료, 전기/수도/가스요금, 배송비, 수수료, 식대, 유류비, 통신비 등)
+
+## 금액 환산 (amount, 정수 원화)
+- "만원" × 10000, "천원" × 1000, "억원" × 100000000
+- 한글 수사: 일/이/삼/사/오/육/칠/팔/구/십/백/천/만/억
+  · "삼십만원" = 300000, "오만오천원" = 55000, "백만원" = 1000000, "일억" = 100000000
+  · "오십" + "만원" = 500000
+- 숫자+한글 혼용: "30만" = 300000, "5만5천" = 55000
+
+## 품목명 (item)
+- 핵심 명사만 (예: "사과", "배", "딸기박스")
+- 비용인 경우 비용 명칭 (예: "임대료", "전기요금", "배송비")
+- 품목이 불명확하면 "매출" 또는 "매입"으로 두기
+
+## 수량 (qty)
+- 숫자 + (개/박스/상자/팩/병/봉지/킬로/킬로그램/kg) 패턴에서 추출
+- 언급 없으면 생략 (필드를 빼라)
+
+## 메모 (memo)
+- 핵심 키워드 10자 이내. 의미 없으면 빈 문자열.
+
+## Few-shot 예시
+- "사과 5박스 삼십만원에 들여왔어"
+  → record_transaction(type=purchase, item=사과, amount=300000, qty=5)
+- "오늘 사과 12만원어치 팔았다"
+  → record_transaction(type=sales, item=사과, amount=120000)
+- "전기요금 8만5천원 냈어"
+  → record_transaction(type=other, item=전기요금, amount=85000)
+- "배 30만원어치 사고 사과 10만원어치 팔았다"
+  → record_transaction(type=purchase, item=배, amount=300000)
+  → record_transaction(type=sales, item=사과, amount=100000)
+- "오늘 매출 백오십만원 났어"
+  → record_transaction(type=sales, item=매출, amount=1500000)
+- "딸기 두 박스 8만원에 떼왔어"
+  → record_transaction(type=purchase, item=딸기, amount=80000, qty=2)${vocabSection}
+
+오직 record_transaction 도구만 호출해. 텍스트로 답하지 마.`;
+}
+
+// ===== AI ANALYZE =====
+const TRANSACTION_TOOL = {
+  name: 'record_transaction',
+  description: '음성에서 추출한 거래 1건을 등록한다. 여러 건이면 도구를 여러 번 호출하라.',
+  input_schema: {
+    type: 'object',
+    required: ['type', 'item', 'amount'],
+    properties: {
+      type: { type: 'string', enum: ['sales', 'purchase', 'other'], description: '매출/매입/기타비용' },
+      item: { type: 'string', description: '핵심 품목명 또는 비용명' },
+      amount: { type: 'integer', description: '정수 원화 금액' },
+      qty: { type: 'integer', description: '수량 (있을 때만 포함)' },
+      memo: { type: 'string', description: '10자 이내 요약 (없으면 빈 문자열)' }
+    }
+  }
+};
+
+async function analyzeWithAI(text) {
+  if (!state.apiKey) {
+    setAIStatus('API 키가 없습니다. 설정 탭에서 등록하거나 "AI 없이 직접 입력"을 사용하세요.', 'error');
+    return;
+  }
+  setAIStatus('🤖 AI 분석 중...', '');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  analyzeBtn.disabled = true;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': state.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: state.model || DEFAULT_MODEL,
+        max_tokens: 1024,
+        system: buildSystemPrompt(),
+        tools: [TRANSACTION_TOOL],
+        tool_choice: { type: 'any' },
+        messages: [{ role: 'user', content: text }]
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(res.status + ': ' + err.slice(0, 200));
+    }
+    const data = await res.json();
+    const toolUses = (data.content || []).filter(b => b.type === 'tool_use' && b.name === 'record_transaction');
+
+    if (toolUses.length === 0) {
+      throw new Error('거래를 인식하지 못했습니다');
+    }
+
+    const transactions = toolUses.map(tu => {
+      const inp = tu.input || {};
+      return {
+        type: ['sales','purchase','other'].includes(inp.type) ? inp.type : 'sales',
+        item: String(inp.item || '').trim(),
+        amount: parseInt(inp.amount, 10) || 0,
+        qty: inp.qty != null && !isNaN(parseInt(inp.qty, 10)) ? parseInt(inp.qty, 10) : null,
+        memo: String(inp.memo || '').trim(),
+        date: todayStr()
+      };
+    }).filter(t => t.item && t.amount > 0);
+
+    if (transactions.length === 0) {
+      throw new Error('유효한 거래를 추출하지 못했습니다');
+    }
+
+    renderCards(transactions);
+    setAIStatus(`✓ ${transactions.length}건 추출 완료`, 'ok');
+    setTimeout(() => setStep(3), 300);
+  } catch (e) {
+    setAIStatus('⚠️ 실패: ' + e.message, 'error');
+  } finally {
+    analyzeBtn.disabled = false;
+  }
+}
+
+function setAIStatus(msg, kind) {
+  const el = document.getElementById('aiStatus');
+  el.textContent = msg;
+  el.classList.remove('error', 'ok');
+  if (kind) el.classList.add(kind);
+}
+
+// ===== STEP 3: CARDS =====
+function newEmptyTransaction(overrides) {
+  return Object.assign({
+    type: 'sales', item: '', amount: 0, qty: null, memo: '', date: todayStr()
+  }, overrides || {});
+}
+
+function renderCards(transactions) {
+  const list = document.getElementById('cardList');
+  list.innerHTML = transactions.map(t => renderCardHTML(t)).join('');
+  bindCardEvents();
+  updateCardCount();
+}
+
+function renderCardHTML(t) {
+  const id = uid();
+  return `
+    <div class="trans-card" data-card-id="${id}" data-type="${t.type}">
+      <div class="trans-card-head">
+        <div class="type-row mini">
+          <button class="type-btn" data-card-type="sales" ${t.type==='sales'?'data-active="1"':''}>매출</button>
+          <button class="type-btn" data-card-type="purchase" ${t.type==='purchase'?'data-active="1"':''}>매입</button>
+          <button class="type-btn" data-card-type="other" ${t.type==='other'?'data-active="1"':''}>기타</button>
+        </div>
+        <button class="card-del-btn" data-action="del" title="삭제">✕</button>
+      </div>
+      <div class="field-row">
+        <input class="field-input" data-field="item" type="text" placeholder="품목명" value="${escapeHtml(t.item)}">
+      </div>
+      <div class="field-grid">
+        <input class="field-input" data-field="amount" type="number" inputmode="numeric" placeholder="금액" value="${t.amount || ''}">
+        <input class="field-input" data-field="qty" type="number" inputmode="numeric" placeholder="수량(선택)" value="${t.qty != null ? t.qty : ''}">
+      </div>
+      <div class="field-grid">
+        <input class="field-input" data-field="date" type="date" value="${t.date}">
+        <input class="field-input" data-field="memo" type="text" placeholder="메모(선택)" value="${escapeHtml(t.memo)}">
+      </div>
+      <button class="card-save-btn" data-action="save">저장</button>
+    </div>
+  `;
+}
+
+function bindCardEvents() {
+  document.querySelectorAll('.trans-card').forEach(card => {
+    // type toggle
+    card.querySelectorAll('[data-card-type]').forEach(btn => {
+      // initialize active state
+      if (btn.hasAttribute('data-active')) btn.classList.add('active');
+      btn.addEventListener('click', () => {
+        const t = btn.dataset.cardType;
+        card.dataset.type = t;
+        card.querySelectorAll('[data-card-type]').forEach(b => {
+          b.classList.toggle('active', b.dataset.cardType === t);
+        });
+      });
+    });
+    // delete
+    card.querySelector('[data-action="del"]').addEventListener('click', () => {
+      card.remove();
+      updateCardCount();
+      checkEmpty();
+    });
+    // save
+    card.querySelector('[data-action="save"]').addEventListener('click', () => {
+      if (saveCard(card)) {
+        card.remove();
+        updateCardCount();
+        checkEmpty();
+      }
+    });
+  });
+}
+
+function saveCard(card) {
+  const type = card.dataset.type;
+  const get = (f) => card.querySelector(`[data-field="${f}"]`).value;
+  const item = get('item').trim();
+  const amount = parseInt(get('amount'), 10);
+  const qtyRaw = get('qty');
+  const qty = qtyRaw === '' ? null : parseInt(qtyRaw, 10);
+  const date = get('date') || todayStr();
+  const memo = get('memo').trim();
+
+  if (!item) { showToast('품목명을 입력하세요'); return false; }
+  if (!amount || isNaN(amount) || amount <= 0) { showToast('금액을 입력하세요'); return false; }
+
+  state.records.unshift({
+    id: Date.now() + Math.floor(Math.random()*1000),
+    type, item, amount,
+    qty: qty == null || isNaN(qty) ? null : qty,
+    date, memo
+  });
+  saveRecords();
+  updateTopbar();
+  showToast('✓ 저장됨');
+  return true;
+}
+
+function updateCardCount() {
+  document.getElementById('cardCount').textContent = document.querySelectorAll('.trans-card').length;
+}
+
+function checkEmpty() {
+  if (document.querySelectorAll('.trans-card').length === 0) {
+    setStep(1);
+  }
+}
+
+document.getElementById('saveAllBtn').addEventListener('click', () => {
+  let saved = 0;
+  const cards = Array.from(document.querySelectorAll('.trans-card'));
+  for (const card of cards) {
+    if (saveCard(card)) {
+      card.remove();
+      saved++;
+    }
+  }
+  updateCardCount();
+  if (saved > 0 && document.querySelectorAll('.trans-card').length === 0) {
+    setStep(1);
+  }
+});
+
+document.getElementById('cancelAllBtn').addEventListener('click', () => {
+  if (!confirm('이 거래들을 저장하지 않고 처음으로 돌아갈까요?')) return;
+  setStep(1);
+});
+
+document.getElementById('addEmptyCardBtn').addEventListener('click', () => {
+  const list = document.getElementById('cardList');
+  const wrap = document.createElement('div');
+  wrap.innerHTML = renderCardHTML(newEmptyTransaction());
+  const node = wrap.firstElementChild;
+  list.appendChild(node);
+  bindCardEvents();
+  updateCardCount();
+});
+
+// ===== TOPBAR =====
+function updateTopbar() {
+  const d = new Date();
+  const days = ['일','월','화','수','목','금','토'];
+  document.getElementById('topbarDate').textContent =
+    `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+  const today = todayStr();
+  const todayRecs = state.records.filter(r => r.date === today);
+  const sales = todayRecs.filter(r => r.type === 'sales').reduce((s,r) => s+r.amount, 0);
+  const purchase = todayRecs.filter(r => r.type === 'purchase').reduce((s,r) => s+r.amount, 0);
+  const other = todayRecs.filter(r => r.type === 'other').reduce((s,r) => s+r.amount, 0);
+  document.getElementById('sumSales').textContent = '₩' + fmtShort(sales);
+  document.getElementById('sumPurchase').textContent = '₩' + fmtShort(purchase);
+  document.getElementById('sumProfit').textContent = '₩' + fmtShort(sales - purchase - other);
+}
+
+// ===== LIST =====
+const typeLabel = { sales: '매출', purchase: '매입', other: '기타' };
+function renderList() {
+  const list = state.filter === 'all' ? state.records : state.records.filter(r => r.type === state.filter);
+  const el = document.getElementById('recordList');
+  if (list.length === 0) {
+    el.innerHTML = '<div class="empty">아직 등록된 내역이 없습니다</div>';
+    return;
+  }
+  const sorted = [...list].sort((a,b) => b.id - a.id);
+  el.innerHTML = sorted.map(r => `
+    <div class="record">
+      <div class="record-left">
+        <div class="record-title">
+          <span class="record-tag ${r.type}">${typeLabel[r.type]}</span>
+          ${escapeHtml(r.item)}
+        </div>
+        <div class="record-meta">${r.date}${r.qty ? ' · ' + r.qty + '개' : ''}</div>
+        ${r.memo ? `<div class="record-memo">${escapeHtml(r.memo)}</div>` : ''}
+      </div>
+      <div class="record-right">
+        <div class="record-amount ${r.type}">${r.type==='sales'?'+':'-'}${fmt(r.amount).slice(1)}</div>
+        <button class="record-del" data-id="${r.id}">삭제</button>
+      </div>
+    </div>
+  `).join('');
+  el.querySelectorAll('.record-del').forEach(b => {
+    b.addEventListener('click', () => {
+      if (!confirm('이 내역을 삭제하시겠습니까?')) return;
+      state.records = state.records.filter(r => r.id !== parseInt(b.dataset.id, 10));
+      saveRecords();
+      renderList();
+      updateTopbar();
+    });
+  });
+}
+document.querySelectorAll('.filter-chip').forEach(c => {
+  c.addEventListener('click', () => {
+    state.filter = c.dataset.filter;
+    document.querySelectorAll('.filter-chip').forEach(x => x.classList.toggle('active', x === c));
+    renderList();
+  });
+});
+
+// ===== STATS =====
+document.querySelectorAll('.stat-tab').forEach(t => {
+  t.addEventListener('click', () => {
+    state.statView = t.dataset.view;
+    document.querySelectorAll('.stat-tab').forEach(x => x.classList.toggle('active', x === t));
+    renderStats();
+  });
+});
+function renderStats() {
+  const v = state.statView;
+  if (v === 'daily') renderDaily();
+  else if (v === 'monthly') renderMonthly();
+  else if (v === 'item') renderByItem();
+  else if (v === 'other') renderOther();
+}
+function dayDelta(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function aggDate(date) {
+  const recs = state.records.filter(r => r.date === date);
+  return {
+    sales: recs.filter(r=>r.type==='sales').reduce((s,r)=>s+r.amount,0),
+    purchase: recs.filter(r=>r.type==='purchase').reduce((s,r)=>s+r.amount,0),
+    other: recs.filter(r=>r.type==='other').reduce((s,r)=>s+r.amount,0)
+  };
+}
+function renderDaily() {
+  const today = todayStr();
+  const a = aggDate(today);
+  const profit = a.sales - a.purchase - a.other;
+  const margin = a.sales > 0 ? (profit / a.sales) * 100 : 0;
+  let html = `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-card-label">오늘 매출</div><div class="stat-card-value sales">${fmt(a.sales)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">오늘 지출</div><div class="stat-card-value purchase">${fmt(a.purchase + a.other)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">순이익</div><div class="stat-card-value ${profit>=0?'profit-pos':'profit-neg'}">${fmt(profit)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">순이익률</div><div class="stat-card-value ${profit>=0?'profit-pos':'profit-neg'}">${margin.toFixed(1)}%</div></div>
+    </div>
+  `;
+  const days = [];
+  let maxVal = 1;
+  for (let i = 13; i >= 0; i--) {
+    const d = dayDelta(i);
+    const ag = aggDate(d);
+    days.push({ date: d, ...ag });
+    maxVal = Math.max(maxVal, ag.sales, ag.purchase + ag.other);
+  }
+  html += `
+    <div class="card">
+      <div class="card-title">최근 14일 수익구조</div>
+      <div class="barchart">
+        ${days.map((d, i) => `
+          <div class="bar-col">
+            <div class="bar-stack">
+              <div class="bar" style="height:${(d.sales/maxVal)*100}%;background:var(--c-sales)"></div>
+              <div class="bar" style="height:${((d.purchase+d.other)/maxVal)*100}%;background:var(--c-purchase)"></div>
+            </div>
+            ${(i % 3 === 0 || i === days.length-1) ? `<div class="bar-label">${d.date.slice(5)}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+      <div class="legend">
+        <span><span class="legend-dot" style="background:var(--c-sales)"></span>매출</span>
+        <span><span class="legend-dot" style="background:var(--c-purchase)"></span>지출</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">일별 비교 (최근 14일)</div>
+      <table class="daily">
+        <tr><th>날짜</th><th>매출</th><th>지출</th><th>순이익</th></tr>
+        ${days.slice().reverse().map(d => {
+          const p = d.sales - d.purchase - d.other;
+          return `<tr>
+            <td class="date">${d.date.slice(5)}</td>
+            <td class="sales">${fmtShort(d.sales)}</td>
+            <td class="purchase">${fmtShort(d.purchase + d.other)}</td>
+            <td class="${p>=0?'profit-pos':'profit-neg'}">${p>=0?'+':''}${fmtShort(p)}</td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>
+  `;
+  document.getElementById('statContent').innerHTML = html;
+}
+function renderMonthly() {
+  const months = [];
+  const d = new Date();
+  let maxVal = 1;
+  for (let i = 5; i >= 0; i--) {
+    const dt = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    const ym = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+    const recs = state.records.filter(r => r.date && r.date.startsWith(ym));
+    const sales = recs.filter(r=>r.type==='sales').reduce((s,r)=>s+r.amount,0);
+    const purchase = recs.filter(r=>r.type==='purchase').reduce((s,r)=>s+r.amount,0);
+    const other = recs.filter(r=>r.type==='other').reduce((s,r)=>s+r.amount,0);
+    months.push({ ym, label: `${dt.getMonth()+1}월`, sales, purchase, other, profit: sales-purchase-other });
+    maxVal = Math.max(maxVal, sales, purchase+other);
+  }
+  const totalProfit = months.reduce((s,m)=>s+m.profit, 0);
+  const avgProfit = totalProfit / months.length;
+  const html = `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-card-label">6개월 누적 순이익</div><div class="stat-card-value ${totalProfit>=0?'profit-pos':'profit-neg'}">${fmt(totalProfit)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">월평균 순이익</div><div class="stat-card-value ${avgProfit>=0?'profit-pos':'profit-neg'}">${fmt(avgProfit)}</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">최근 6개월 손익 추이</div>
+      <div class="barchart">
+        ${months.map(m => `
+          <div class="bar-col">
+            <div class="bar-stack">
+              <div class="bar" style="height:${(m.sales/maxVal)*100}%;background:var(--c-sales)"></div>
+              <div class="bar" style="height:${((m.purchase+m.other)/maxVal)*100}%;background:var(--c-purchase)"></div>
+            </div>
+            <div class="bar-label">${m.label}</div>
+          </div>
+        `).join('')}
+      </div>
+      <div class="legend">
+        <span><span class="legend-dot" style="background:var(--c-sales)"></span>매출</span>
+        <span><span class="legend-dot" style="background:var(--c-purchase)"></span>지출</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">월별 상세</div>
+      <table class="daily">
+        <tr><th>월</th><th>매출</th><th>지출</th><th>순이익</th></tr>
+        ${months.map(m => `
+          <tr>
+            <td class="date">${m.ym.slice(2)}</td>
+            <td class="sales">${fmtShort(m.sales)}</td>
+            <td class="purchase">${fmtShort(m.purchase+m.other)}</td>
+            <td class="${m.profit>=0?'profit-pos':'profit-neg'}">${m.profit>=0?'+':''}${fmtShort(m.profit)}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  `;
+  document.getElementById('statContent').innerHTML = html;
+}
+function renderByItem() {
+  const items = {};
+  state.records.forEach(r => {
+    if (r.type === 'other') return;
+    const key = r.item;
+    if (!items[key]) items[key] = { name: key, sales: 0, purchase: 0 };
+    if (r.type === 'sales') items[key].sales += r.amount;
+    else items[key].purchase += r.amount;
+  });
+  const arr = Object.values(items)
+    .map(i => ({ ...i, profit: i.sales - i.purchase,
+      margin: i.sales > 0 ? ((i.sales - i.purchase) / i.sales) * 100 : (i.purchase > 0 ? -100 : 0) }))
+    .sort((a,b) => b.profit - a.profit);
+  if (arr.length === 0) {
+    document.getElementById('statContent').innerHTML = '<div class="empty">분석할 매출/매입 데이터가 없습니다</div>';
+    return;
+  }
+  const html = `
+    <div class="card">
+      <div class="card-title">품목별 마진 분석</div>
+      <div class="item-row head">
+        <div>품목</div><div class="right">매출</div><div class="right">이익</div><div class="right">마진율</div>
+      </div>
+      ${arr.map(i => {
+        const pct = Math.max(-100, Math.min(100, i.margin));
+        return `
+          <div class="item-row">
+            <div class="name">${escapeHtml(i.name)}</div>
+            <div class="right">${fmtShort(i.sales)}</div>
+            <div class="right" style="color:${i.profit>=0?'var(--c-sales)':'var(--c-purchase)'};font-weight:600">${i.profit>=0?'+':''}${fmtShort(i.profit)}</div>
+            <div class="right">
+              <div style="font-weight:700;color:${i.margin>=0?'var(--c-sales)':'var(--c-purchase)'}">${i.margin.toFixed(1)}%</div>
+              <div class="margin-bar"><div class="margin-fill ${i.margin<0?'neg':''}" style="width:${Math.abs(pct)}%"></div></div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('statContent').innerHTML = html;
+}
+function renderOther() {
+  const others = state.records.filter(r => r.type === 'other');
+  if (others.length === 0) {
+    document.getElementById('statContent').innerHTML = '<div class="empty">기타비용 내역이 없습니다</div>';
+    return;
+  }
+  const grouped = {};
+  others.forEach(r => {
+    const k = r.item;
+    if (!grouped[k]) grouped[k] = { name: k, amount: 0, count: 0 };
+    grouped[k].amount += r.amount;
+    grouped[k].count += 1;
+  });
+  const arr = Object.values(grouped).sort((a,b) => b.amount - a.amount);
+  const total = arr.reduce((s,a) => s + a.amount, 0);
+  const html = `
+    <div class="stat-cards">
+      <div class="stat-card"><div class="stat-card-label">기타비용 합계</div><div class="stat-card-value purchase">${fmt(total)}</div></div>
+      <div class="stat-card"><div class="stat-card-label">항목 수</div><div class="stat-card-value">${arr.length}개</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">항목별 비중</div>
+      ${arr.map(a => {
+        const pct = total > 0 ? (a.amount / total) * 100 : 0;
+        return `
+          <div class="other-row">
+            <div class="other-row-left">
+              <div class="other-name">${escapeHtml(a.name)} <span style="color:var(--c-text-dim);font-weight:400;font-size:11px">(${a.count}건)</span></div>
+              <div class="other-pct-bar"><div class="other-pct-fill" style="width:${pct}%"></div></div>
+            </div>
+            <div style="text-align:right">
+              <div class="other-amount">${fmt(a.amount)}</div>
+              <div class="other-pct">${pct.toFixed(1)}%</div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  document.getElementById('statContent').innerHTML = html;
+}
+
+// ===== SETTINGS =====
+document.getElementById('apiKeyInput').value = state.apiKey;
+document.getElementById('saveKey').addEventListener('click', () => {
+  const v = document.getElementById('apiKeyInput').value.trim();
+  state.apiKey = v;
+  localStorage.setItem(KEY_STORE, v);
+  showToast(v ? '✓ API 키 저장됨' : 'API 키가 제거되었습니다');
+});
+
+// Model select handling
+const modelSelect = document.getElementById('modelSelect');
+const modelCustom = document.getElementById('modelCustom');
+function initModelUI() {
+  const knownOptions = Array.from(modelSelect.options).map(o => o.value);
+  if (knownOptions.includes(state.model)) {
+    modelSelect.value = state.model;
+    modelCustom.hidden = true;
+  } else {
+    modelSelect.value = '__custom__';
+    modelCustom.hidden = false;
+    modelCustom.value = state.model;
+  }
+}
+modelSelect.addEventListener('change', () => {
+  const v = modelSelect.value;
+  if (v === '__custom__') {
+    modelCustom.hidden = false;
+    modelCustom.focus();
+  } else {
+    modelCustom.hidden = true;
+    state.model = v;
+    localStorage.setItem(MODEL_STORE, v);
+    showToast('✓ 모델: ' + v);
+  }
+});
+modelCustom.addEventListener('change', () => {
+  const v = modelCustom.value.trim();
+  if (v) {
+    state.model = v;
+    localStorage.setItem(MODEL_STORE, v);
+    showToast('✓ 모델: ' + v);
+  }
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('모든 데이터를 삭제하시겠습니까?\n복구할 수 없습니다.')) return;
+  state.records = [];
+  saveRecords();
+  updateTopbar();
+  showToast('데이터가 삭제되었습니다');
+});
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state.records, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sales-data-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ 내보내기 완료');
+});
+
+// ===== INIT =====
+function init() {
+  document.getElementById('dataCount').textContent = state.records.length + '건';
+  initModelUI();
+  updateTopbar();
+  setStep(1);
+}
+init();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
