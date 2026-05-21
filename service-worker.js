@@ -1,5 +1,10 @@
 const CACHE = 'sales-app-v2';
-const ASSETS = ['/', '/index.html', '/icon.svg', '/manifest.json'];
+const ASSETS = [
+  '/sales-app/',
+  '/sales-app/index.html',
+  '/sales-app/icon.svg',
+  '/sales-app/manifest.json'
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(
