@@ -54,10 +54,11 @@
   .mic-interim:empty::before{content:'예: "사과 5박스 30만원에 들여왔어"';color:var(--c-text-dim);}
 
   /* INPUT BUTTONS */
-  .input-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
-  .input-btn{padding:12px 8px;border-radius:10px;border:1.5px solid var(--c-border);background:var(--c-card);font-size:12px;font-weight:600;color:var(--c-text-sub);cursor:pointer;text-align:center;line-height:1.4;}
-  .input-btn .ib-icon{font-size:22px;display:block;margin-bottom:4px;}
+  .input-btns{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:8px;}
+  .input-btn{padding:10px 4px;border-radius:10px;border:1.5px solid var(--c-border);background:var(--c-card);font-size:11px;font-weight:600;color:var(--c-text-sub);cursor:pointer;text-align:center;line-height:1.4;}
+  .input-btn .ib-icon{font-size:20px;display:block;margin-bottom:3px;}
   .input-btn:active{background:#F0F0F2;}
+  .scan-box.qr{aspect-ratio:1/1;width:55%;}
 
   /* STEP NAV */
   .step-nav{display:flex;gap:4px;font-size:11px;color:var(--c-text-dim);margin-bottom:8px;align-items:center;}
@@ -239,6 +240,9 @@
             <button class="input-btn" id="barcodeBtn">
               <span class="ib-icon">📷</span>바코드 스캔
             </button>
+            <button class="input-btn" id="qrBtn">
+              <span class="ib-icon">🔲</span>QR코드 스캔
+            </button>
             <button class="input-btn" id="photoBtn">
               <span class="ib-icon">🖼️</span>사진으로 인식
             </button>
@@ -320,9 +324,10 @@
         </div>
       </div>
       <div class="card">
-        <div class="card-title">바코드/사진 인식 안내</div>
+        <div class="card-title">바코드/QR/사진 인식 안내</div>
         <div style="font-size:12px;color:var(--c-text-sub);line-height:1.9">
-          📷 <b>바코드 스캔</b>: 상품 바코드를 카메라로 인식 → 상품명 자동 조회<br>
+          📷 <b>바코드 스캔</b>: 상품 바코드 인식 → Open Food Facts DB에서 상품명 자동 조회<br>
+          🔲 <b>QR코드 스캔</b>: QR코드 내용을 품목명으로 직접 사용 (수정 가능)<br>
           🖼️ <b>사진으로 인식</b>: 촬영 후 ①바코드 감지 → ②AI 이미지 분석 순으로 시도<br>
           AI 인식: 과일·채소·포장 식품 인식 가능, 결과를 수정해서 등록<br>
           <span style="color:var(--c-text-dim)">(첫 실행 시 AI 모델 다운로드 약 8MB)</span>
@@ -530,9 +535,16 @@ let camStream = null, scanTimer = null, camMode = 'barcode', camBarcode = '';
 
 async function openCam(mode) {
   camMode = mode; camBarcode = '';
-  document.getElementById('camTitle').textContent = mode === 'barcode' ? '📷 바코드 스캔' : '📸 사진으로 품목 인식';
-  document.getElementById('camStatus').textContent = mode === 'barcode' ? '카메라를 바코드에 가져다 대세요' : '상품을 화면에 맞추고 촬영하세요';
-  document.getElementById('camCaptureBtn').hidden = mode === 'barcode' && 'BarcodeDetector' in window;
+  const titles = {barcode:'📷 바코드 스캔', qr:'🔲 QR코드 스캔', photo:'📸 사진으로 품목 인식'};
+  const hints  = {barcode:'카메라를 바코드에 가져다 대세요', qr:'카메라를 QR코드에 가져다 대세요', photo:'상품을 화면에 맞추고 촬영하세요'};
+  document.getElementById('camTitle').textContent = titles[mode] || titles.barcode;
+  document.getElementById('camStatus').textContent = hints[mode] || hints.barcode;
+  // QR 스캔 가이드: 정사각형 / 바코드: 가로형
+  const scanBox = document.querySelector('.scan-box');
+  if (mode === 'qr') scanBox.classList.add('qr'); else scanBox.classList.remove('qr');
+  document.getElementById('scanGuide').hidden = mode === 'photo';
+  const autoScan = (mode === 'barcode' || mode === 'qr') && 'BarcodeDetector' in window;
+  document.getElementById('camCaptureBtn').hidden = autoScan;
   document.getElementById('camResultBox').hidden = true;
   document.getElementById('camActionBar').hidden = false;
   document.getElementById('camOverlay').hidden = false;
@@ -545,23 +557,48 @@ async function openCam(mode) {
     const video = document.getElementById('camVideo');
     video.srcObject = camStream;
     video.play();
-    if (mode === 'barcode') {
+    if (mode === 'barcode' || mode === 'qr') {
       if ('BarcodeDetector' in window) startBarcodeScan();
-      else { document.getElementById('camCaptureBtn').hidden = false; document.getElementById('camStatus').textContent = '📸 촬영 버튼으로 바코드를 찍어주세요'; }
+      else { document.getElementById('camCaptureBtn').hidden = false; document.getElementById('camStatus').textContent = '📸 촬영 버튼으로 찍어주세요'; }
     }
   } catch(e) { showToast('카메라 권한을 허용해 주세요'); closeCam(); }
 }
 
 function startBarcodeScan() {
   const video = document.getElementById('camVideo');
-  const detector = new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code','data_matrix']});
+  const formats = camMode === 'qr'
+    ? ['qr_code']
+    : ['ean_13','ean_8','upc_a','upc_e','code_128','code_39','data_matrix'];
+  const detector = new BarcodeDetector({formats});
   scanTimer = setInterval(async () => {
     if (!camStream || video.readyState < 2) return;
     try {
       const codes = await detector.detect(video);
-      if (codes.length > 0) { stopScan(); if (navigator.vibrate) navigator.vibrate([80,50,80]); await lookupProduct(codes[0].rawValue); }
+      if (codes.length > 0) {
+        stopScan();
+        if (navigator.vibrate) navigator.vibrate([80,50,80]);
+        if (camMode === 'qr') handleQRCode(codes[0].rawValue);
+        else await lookupProduct(codes[0].rawValue);
+      }
     } catch(e) {}
   }, 300);
+}
+
+function handleQRCode(value) {
+  camBarcode = value;
+  const isURL = /^https?:\/\//i.test(value);
+  const labelEl = document.getElementById('camResultLabel');
+  if (isURL) {
+    labelEl.innerHTML = `<span class="ai-badge">🔲 QR</span> URL이 인식되었습니다 — 품목명을 입력하세요`;
+    document.getElementById('camNameInput').value = '';
+    document.getElementById('camStatus').textContent = `QR URL: ${value.slice(0,40)}${value.length>40?'…':''}`;
+  } else {
+    labelEl.innerHTML = `<span class="ai-badge">🔲 QR</span> QR 내용을 품목명으로 사용합니다 — 수정 가능`;
+    document.getElementById('camNameInput').value = value.slice(0, 40);
+    document.getElementById('camStatus').textContent = `✓ QR 인식 완료 — 수정 후 등록하세요`;
+  }
+  document.getElementById('camResultBox').hidden = false;
+  document.getElementById('camActionBar').hidden = true;
 }
 
 function stopScan() { if (scanTimer) { clearInterval(scanTimer); scanTimer = null; } }
@@ -639,6 +676,7 @@ async function lookupProduct(barcode) {
 }
 
 document.getElementById('barcodeBtn').addEventListener('click', () => openCam('barcode'));
+document.getElementById('qrBtn').addEventListener('click', () => openCam('qr'));
 document.getElementById('photoBtn').addEventListener('click', () => openCam('photo'));
 document.getElementById('camClose').addEventListener('click', closeCam);
 document.getElementById('camCaptureBtn').addEventListener('click', captureAndDetect);
@@ -656,8 +694,9 @@ document.getElementById('camRescanBtn').addEventListener('click', () => {
   document.getElementById('camCaptureBtn').hidden = camMode === 'barcode' && 'BarcodeDetector' in window;
   document.getElementById('camResultLabel').textContent = '인식된 상품명 (수정 가능)';
   camBarcode = '';
-  document.getElementById('camStatus').textContent = camMode === 'barcode' ? '카메라를 바코드에 가져다 대세요' : '상품을 화면에 맞추고 촬영하세요';
-  if (camMode === 'barcode' && 'BarcodeDetector' in window) startBarcodeScan();
+  const hints2 = {barcode:'카메라를 바코드에 가져다 대세요', qr:'카메라를 QR코드에 가져다 대세요', photo:'상품을 화면에 맞추고 촬영하세요'};
+  document.getElementById('camStatus').textContent = hints2[camMode] || hints2.barcode;
+  if ((camMode === 'barcode' || camMode === 'qr') && 'BarcodeDetector' in window) startBarcodeScan();
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden) closeCam(); });
 
