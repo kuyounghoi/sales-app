@@ -188,7 +188,8 @@
   .cam-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
   .cam-title{font-size:15px;font-weight:700;}
   .cam-close-btn{width:32px;height:32px;border-radius:50%;background:#E8E8ED;border:none;font-size:15px;cursor:pointer;color:var(--c-text-sub);display:flex;align-items:center;justify-content:center;}
-  .cam-view{position:relative;width:100%;aspect-ratio:4/3;border-radius:14px;overflow:hidden;background:#000;margin-bottom:10px;}
+  .cam-view{position:relative;width:100%;aspect-ratio:3/4;border-radius:14px;overflow:hidden;background:#000;margin-bottom:10px;}
+  @media(orientation:landscape){.cam-view{aspect-ratio:4/3;}}
   #camVideo{width:100%;height:100%;object-fit:cover;display:block;}
   .scan-guide{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
   .scan-box{width:62%;aspect-ratio:1.8;border-radius:10px;border:2.5px solid var(--c-sales);box-shadow:0 0 0 2000px rgba(0,0,0,0.38);animation:scanPulse 1.8s ease-in-out infinite;}
@@ -433,196 +434,306 @@ document.getElementById('skipAIBtn').addEventListener('click',()=>{const text=do
 document.getElementById('analyzeBtn').addEventListener('click',()=>{const text=document.getElementById('transcriptEdit').value.trim();if(!text){showToast('텍스트를 입력하세요');return;}const results=parseLocally(text);const ps=document.getElementById('parseStatus');if(results.length>0&&(results[0].item||results[0].amount>0)){ps.textContent=`✓ 분석 완료 (${results.length}건)`;ps.className='parse-status ok';renderCards(results);setTimeout(()=>setStep(3),200);}else{ps.textContent='⚠️ 금액/품목을 인식하지 못했습니다. 직접 수정 후 재시도하세요.';ps.className='parse-status warn';}});
 
 // ===== AI 이미지 분류 (TensorFlow.js MobileNet) =====
+// 한국 소매업 관련 ImageNet 레이블 → 한국어 매핑
 const IMAGENET_KO = {
-  'granny smith':'사과','fig':'무화과','pineapple':'파인애플','banana':'바나나',
-  'jackfruit':'잭프루트','pomegranate':'석류','strawberry':'딸기','orange':'오렌지',
-  'lemon':'레몬','hip':'로즈힙',
-  'artichoke':'아티초크','head cabbage':'양배추','broccoli':'브로콜리',
-  'cauliflower':'콜리플라워','zucchini':'애호박','acorn squash':'단호박',
-  'butternut squash':'버터넛호박','cucumber':'오이','corn':'옥수수',
-  'bell pepper':'파프리카','mushroom':'버섯','spaghetti squash':'호박',
-  'pizza':'피자','pretzel':'프레첼','bagel':'베이글','cheeseburger':'햄버거',
-  'hotdog':'핫도그','ice cream':'아이스크림','bread':'빵','dough':'도우',
-  'carbonara':'파스타','burrito':'부리또',
-  'wine bottle':'와인','beer bottle':'맥주','pop bottle':'음료수',
-  'water bottle':'생수','coffee mug':'커피','espresso':'에스프레소','cup':'음료컵',
-  'packet':'봉지','carton':'종이박스','plastic bag':'비닐봉지',
-  'cardboard box':'박스','basket':'바구니',
-  'egg':'달걀','milk can':'우유통','honeycomb':'꿀',
-  'tench':'생선','salmon':'연어','hen':'닭','cock':'닭',
-  'pig':'돼지','hog':'돼지','ox':'소','goat':'염소',
-  'soap dispenser':'세제','lotion':'로션','shampoo':'샴푸',
-  'toothbrush':'칫솔','toilet tissue':'화장지'
+  // 과일
+  'granny smith':'사과', 'fig':'무화과', 'pineapple':'파인애플', 'banana':'바나나',
+  'jackfruit':'잭프루트', 'pomegranate':'석류', 'strawberry':'딸기', 'orange':'오렌지',
+  'lemon':'레몬', 'hip':'로즈힙',
+  // 채소
+  'artichoke':'아티초크', 'head cabbage':'양배추', 'broccoli':'브로콜리',
+  'cauliflower':'콜리플라워', 'zucchini':'애호박', 'acorn squash':'단호박',
+  'butternut squash':'버터넛호박', 'cucumber':'오이', 'corn':'옥수수',
+  'bell pepper':'파프리카', 'mushroom':'버섯', 'cardoon':'엉겅퀴',
+  'spaghetti squash':'호박',
+  // 식품
+  'pizza':'피자', 'pretzel':'프레첼', 'bagel':'베이글', 'cheeseburger':'햄버거',
+  'hotdog':'핫도그', 'ice cream':'아이스크림', 'bread':'빵', 'dough':'도우',
+  'carbonara':'파스타', 'burrito':'부리또',
+  // 음료
+  'wine bottle':'와인', 'beer bottle':'맥주', 'pop bottle':'음료수',
+  'water bottle':'생수', 'coffee mug':'커피', 'espresso':'에스프레소', 'cup':'음료컵',
+  // 포장/용기
+  'packet':'봉지', 'carton':'종이박스', 'plastic bag':'비닐봉지',
+  'cardboard box':'박스', 'basket':'바구니',
+  // 기타 식자재
+  'egg':'달걀', 'milk can':'우유통', 'honeycomb':'꿀',
+  'butterscotch':'사탕과자', 'pretzel':'프레첼',
+  // 동물 (생선/육류 힌트)
+  'tench':'생선', 'goldfish':'금붕어', 'salmon':'연어', 'gar':'생선',
+  'puffer':'복어', 'jellyfish':'해파리', 'sea cucumber':'해삼',
+  'hen':'닭', 'cock':'닭', 'prairie chicken':'닭',
+  'pig':'돼지', 'hog':'돼지', 'ox':'소', 'goat':'염소',
+  // 공산품
+  'soap dispenser':'세제', 'detergent':'세제', 'lotion':'로션',
+  'shampoo':'샴푸', 'toothbrush':'칫솔', 'toilet tissue':'화장지'
 };
 
-let tfModel=null,tfLoading=false;
+let tfModel = null, tfLoading = false;
 
-function loadScript(src){return new Promise((res,rej)=>{if(document.querySelector(`script[src="${src}"]`)){res();return;}const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    if (document.querySelector(`script[src="${src}"]`)) { res(); return; }
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+}
 
-async function loadTFModel(){
-  if(tfModel)return tfModel;
-  if(tfLoading){let n=0;while(tfLoading&&n<120){await new Promise(r=>setTimeout(r,500));n++;}return tfModel;}
-  tfLoading=true;
-  try{
+async function loadTFModel() {
+  if (tfModel) return tfModel;
+  if (tfLoading) {
+    let n = 0;
+    while (tfLoading && n < 120) { await new Promise(r => setTimeout(r, 500)); n++; }
+    return tfModel;
+  }
+  tfLoading = true;
+  try {
     await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.2.0/dist/tf.min.js');
     await loadScript('https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js');
-    tfModel=await window.mobilenet.load({version:2,alpha:0.5});
-  }catch(e){console.error('TF 모델 로딩 실패:',e);tfModel=null;}
-  finally{tfLoading=false;}
+    // window.mobilenet is set by the CDN script
+    tfModel = await window.mobilenet.load({ version: 2, alpha: 0.5 });
+  } catch(e) {
+    console.error('TF 모델 로딩 실패:', e);
+    tfModel = null;
+  } finally {
+    tfLoading = false;
+  }
   return tfModel;
 }
 
-async function classifyImage(canvas){
-  try{
-    const model=await loadTFModel();
-    if(!model)return null;
-    const preds=await model.classify(canvas,5);
-    for(const p of preds){
-      const label=p.className.toLowerCase();
-      for(const [eng,kor] of Object.entries(IMAGENET_KO)){
-        if(label.includes(eng))return{name:kor,confidence:p.probability,original:p.className};
+async function classifyImage(canvas) {
+  try {
+    const model = await loadTFModel();
+    if (!model) return null;
+    const preds = await model.classify(canvas, 5);
+    // 한국어 매핑에서 찾기
+    for (const p of preds) {
+      const label = p.className.toLowerCase();
+      for (const [eng, kor] of Object.entries(IMAGENET_KO)) {
+        if (label.includes(eng)) {
+          return { name: kor, confidence: p.probability, original: p.className };
+        }
       }
     }
-    if(preds.length>0){const top=preds[0].className.split(',')[0].trim();return{name:top,confidence:preds[0].probability,original:preds[0].className};}
+    // 한국어 매핑 없으면 상위 예측의 첫 단어 사용
+    if (preds.length > 0) {
+      const top = preds[0].className.split(',')[0].trim();
+      return { name: top, confidence: preds[0].probability, original: preds[0].className };
+    }
     return null;
-  }catch(e){return null;}
+  } catch(e) { return null; }
 }
 
 // ===== CAMERA / BARCODE =====
-let camStream=null,scanTimer=null,camMode='barcode',camBarcode='';
+let camStream = null, scanTimer = null, camMode = 'barcode', camBarcode = '';
 
-async function openCam(mode){
-  camMode=mode;camBarcode='';
-  document.getElementById('camTitle').textContent=mode==='barcode'?'📷 바코드 스캔':'📸 사진으로 품목 인식';
-  document.getElementById('camStatus').textContent=mode==='barcode'?'카메라를 바코드에 가져다 대세요':'상품을 화면에 맞추고 촬영하세요';
-  document.getElementById('camCaptureBtn').hidden=mode==='barcode'&&'BarcodeDetector' in window;
-  document.getElementById('camResultBox').hidden=true;
-  document.getElementById('camActionBar').hidden=false;
-  document.getElementById('camOverlay').hidden=false;
-  if(mode==='photo')loadTFModel().catch(()=>{});
-  try{
-    camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:960}}});
-    const video=document.getElementById('camVideo');
-    video.srcObject=camStream;video.play();
-    if(mode==='barcode'){
-      if('BarcodeDetector' in window)startBarcodeScan();
-      else{document.getElementById('camCaptureBtn').hidden=false;document.getElementById('camStatus').textContent='📸 촬영 버튼으로 바코드를 찍어주세요';}
+async function openCam(mode) {
+  camMode = mode; camBarcode = '';
+  document.getElementById('camTitle').textContent = mode === 'barcode' ? '📷 바코드 스캔' : '📸 사진으로 품목 인식';
+  document.getElementById('camStatus').textContent = mode === 'barcode' ? '카메라를 바코드에 가져다 대세요' : '상품을 화면에 맞추고 촬영하세요';
+  document.getElementById('camCaptureBtn').hidden = mode === 'barcode' && 'BarcodeDetector' in window;
+  document.getElementById('camResultBox').hidden = true;
+  document.getElementById('camActionBar').hidden = false;
+  document.getElementById('camOverlay').hidden = false;
+
+  // 사진 모드: TF 모델 백그라운드 미리 로딩
+  if (mode === 'photo') loadTFModel().catch(() => {});
+
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1080},height:{ideal:1440}}});
+    const video = document.getElementById('camVideo');
+    video.srcObject = camStream;
+    video.play();
+    if (mode === 'barcode') {
+      if ('BarcodeDetector' in window) startBarcodeScan();
+      else { document.getElementById('camCaptureBtn').hidden = false; document.getElementById('camStatus').textContent = '📸 촬영 버튼으로 바코드를 찍어주세요'; }
     }
-  }catch(e){showToast('카메라 권한을 허용해 주세요');closeCam();}
+  } catch(e) { showToast('카메라 권한을 허용해 주세요'); closeCam(); }
 }
 
-function startBarcodeScan(){
-  const video=document.getElementById('camVideo');
-  const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code','data_matrix']});
-  scanTimer=setInterval(async()=>{
-    if(!camStream||video.readyState<2)return;
-    try{const codes=await detector.detect(video);if(codes.length>0){stopScan();if(navigator.vibrate)navigator.vibrate([80,50,80]);await lookupProduct(codes[0].rawValue);}}catch(e){}
-  },300);
+function startBarcodeScan() {
+  const video = document.getElementById('camVideo');
+  const detector = new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code','data_matrix']});
+  scanTimer = setInterval(async () => {
+    if (!camStream || video.readyState < 2) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes.length > 0) { stopScan(); if (navigator.vibrate) navigator.vibrate([80,50,80]); await lookupProduct(codes[0].rawValue); }
+    } catch(e) {}
+  }, 300);
 }
 
-function stopScan(){if(scanTimer){clearInterval(scanTimer);scanTimer=null;}}
+function stopScan() { if (scanTimer) { clearInterval(scanTimer); scanTimer = null; } }
 
-function closeCam(){
+function closeCam() {
   stopScan();
-  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
-  document.getElementById('camVideo').srcObject=null;
-  document.getElementById('camOverlay').hidden=true;
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  document.getElementById('camVideo').srcObject = null;
+  document.getElementById('camOverlay').hidden = true;
 }
 
-async function captureAndDetect(){
-  const video=document.getElementById('camVideo'),canvas=document.getElementById('camCanvas');
-  canvas.width=video.videoWidth||640;canvas.height=video.videoHeight||480;
-  canvas.getContext('2d').drawImage(video,0,0);
-  document.getElementById('camActionBar').hidden=true;
-  document.getElementById('camStatus').textContent='🔍 바코드 감지 중...';
+async function captureAndDetect() {
+  const video = document.getElementById('camVideo');
+  const canvas = document.getElementById('camCanvas');
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  document.getElementById('camActionBar').hidden = true;
+  document.getElementById('camStatus').textContent = '🔍 바코드 감지 중...';
 
   // 1단계: 바코드 감지
-  if('BarcodeDetector' in window){
-    const detector=new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code']});
-    try{const codes=await detector.detect(canvas);if(codes.length>0){if(navigator.vibrate)navigator.vibrate(80);await lookupProduct(codes[0].rawValue);return;}}catch(e){}
+  if ('BarcodeDetector' in window) {
+    const detector = new BarcodeDetector({formats:['ean_13','ean_8','upc_a','upc_e','code_128','code_39','qr_code']});
+    try {
+      const codes = await detector.detect(canvas);
+      if (codes.length > 0) {
+        if (navigator.vibrate) navigator.vibrate(80);
+        await lookupProduct(codes[0].rawValue);
+        return;
+      }
+    } catch(e) {}
   }
 
   // 2단계: 바코드 없음 → AI 이미지 인식
-  document.getElementById('camStatus').textContent='🤖 AI 이미지 분석 중... (첫 실행 시 모델 로딩으로 잠시 걸립니다)';
-  try{
-    const result=await classifyImage(canvas);
-    const labelEl=document.getElementById('camResultLabel');
-    if(result){
-      document.getElementById('camNameInput').value=result.name;
-      labelEl.innerHTML=`<span class="ai-badge">🤖 AI 인식</span> 인식된 상품명 — 수정 후 등록하세요`;
-      document.getElementById('camResultBox').hidden=false;
-      document.getElementById('camStatus').textContent=`🤖 "${result.name}" 인식 (정확도 ${(result.confidence*100).toFixed(0)}%) — 수정 가능합니다`;
-    }else{
-      document.getElementById('camNameInput').value='';
-      labelEl.innerHTML='품목명을 직접 입력하세요';
-      document.getElementById('camResultBox').hidden=false;
-      document.getElementById('camStatus').textContent='자동 인식이 어렵습니다. 품목명을 직접 입력하세요.';
+  document.getElementById('camStatus').textContent = '🤖 AI 이미지 분석 중... (첫 실행 시 모델 로딩으로 잠시 걸립니다)';
+  try {
+    const result = await classifyImage(canvas);
+    const labelEl = document.getElementById('camResultLabel');
+    if (result) {
+      document.getElementById('camNameInput').value = result.name;
+      labelEl.innerHTML = `<span class="ai-badge">🤖 AI 인식</span> 인식된 상품명 — 수정 후 등록하세요`;
+      document.getElementById('camResultBox').hidden = false;
+      document.getElementById('camStatus').textContent = `🤖 "${result.name}" 인식 (정확도 ${(result.confidence*100).toFixed(0)}%) — 수정 가능합니다`;
+    } else {
+      document.getElementById('camNameInput').value = '';
+      labelEl.innerHTML = '품목명을 직접 입력하세요';
+      document.getElementById('camResultBox').hidden = false;
+      document.getElementById('camStatus').textContent = '자동 인식이 어렵습니다. 품목명을 직접 입력하세요.';
     }
-  }catch(e){
-    document.getElementById('camNameInput').value='';
-    document.getElementById('camResultLabel').textContent='품목명을 직접 입력하세요';
-    document.getElementById('camResultBox').hidden=false;
-    document.getElementById('camStatus').textContent='인식 오류. 품목명을 직접 입력하세요.';
+  } catch(e) {
+    document.getElementById('camNameInput').value = '';
+    document.getElementById('camResultLabel').textContent = '품목명을 직접 입력하세요';
+    document.getElementById('camResultBox').hidden = false;
+    document.getElementById('camStatus').textContent = '인식 오류. 품목명을 직접 입력하세요.';
   }
 }
 
-async function lookupProduct(barcode){
-  camBarcode=barcode;
-  document.getElementById('camStatus').textContent='🔍 상품 정보 조회 중...';
-  document.getElementById('camActionBar').hidden=true;
-  let name='';
-  try{
-    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
-    const res=await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,{signal:ctrl.signal});
-    const data=await res.json();
-    if(data.status===1&&data.product)name=(data.product.product_name_ko||data.product.product_name||data.product.abbreviated_product_name||'').trim();
-  }catch(e){}
-  const labelEl=document.getElementById('camResultLabel');
-  labelEl.innerHTML=name?'인식된 상품명 (수정 가능)':`바코드: ${barcode} — 상품 DB에 없습니다. 품목명을 입력하세요.`;
-  document.getElementById('camNameInput').value=name||'';
-  document.getElementById('camResultBox').hidden=false;
-  document.getElementById('camStatus').textContent=name?`✓ 상품 조회 완료 (${barcode})`:`바코드: ${barcode} (DB에 없음)`;
+async function lookupProduct(barcode) {
+  camBarcode = barcode;
+  document.getElementById('camStatus').textContent = '🔍 상품 정보 조회 중...';
+  document.getElementById('camActionBar').hidden = true;
+  let name = '';
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 6000);
+    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`, {signal:ctrl.signal});
+    const data = await res.json();
+    if (data.status === 1 && data.product) name = (data.product.product_name_ko || data.product.product_name || data.product.abbreviated_product_name || '').trim();
+  } catch(e) {}
+  const labelEl = document.getElementById('camResultLabel');
+  labelEl.innerHTML = name ? '인식된 상품명 (수정 가능)' : `바코드: ${barcode} — 상품 DB에 없습니다. 품목명을 입력하세요.`;
+  document.getElementById('camNameInput').value = name || '';
+  document.getElementById('camResultBox').hidden = false;
+  document.getElementById('camStatus').textContent = name ? `✓ 상품 조회 완료 (${barcode})` : `바코드: ${barcode} (DB에 없음)`;
 }
 
-document.getElementById('barcodeBtn').addEventListener('click',()=>openCam('barcode'));
-document.getElementById('photoBtn').addEventListener('click',()=>openCam('photo'));
-document.getElementById('camClose').addEventListener('click',closeCam);
-document.getElementById('camCaptureBtn').addEventListener('click',captureAndDetect);
-document.getElementById('camManualBtn').addEventListener('click',()=>{closeCam();renderCards([newEmptyTransaction()]);setStep(3);});
-document.getElementById('camConfirmBtn').addEventListener('click',()=>{
-  const name=document.getElementById('camNameInput').value.trim();
-  if(!name){showToast('품목명을 입력하세요');return;}
-  closeCam();renderCards([newEmptyTransaction({item:name,memo:camBarcode?`바코드:${camBarcode}`:'',type:'purchase'})]);setStep(3);
+document.getElementById('barcodeBtn').addEventListener('click', () => openCam('barcode'));
+document.getElementById('photoBtn').addEventListener('click', () => openCam('photo'));
+document.getElementById('camClose').addEventListener('click', closeCam);
+document.getElementById('camCaptureBtn').addEventListener('click', captureAndDetect);
+document.getElementById('camManualBtn').addEventListener('click', () => { closeCam(); renderCards([newEmptyTransaction()]); setStep(3); });
+document.getElementById('camConfirmBtn').addEventListener('click', () => {
+  const name = document.getElementById('camNameInput').value.trim();
+  if (!name) { showToast('품목명을 입력하세요'); return; }
+  closeCam();
+  renderCards([newEmptyTransaction({item:name, memo:camBarcode?`바코드:${camBarcode}`:'', type:'purchase'})]);
+  setStep(3);
 });
-document.getElementById('camRescanBtn').addEventListener('click',()=>{
-  document.getElementById('camResultBox').hidden=true;
-  document.getElementById('camActionBar').hidden=false;
-  document.getElementById('camCaptureBtn').hidden=camMode==='barcode'&&'BarcodeDetector' in window;
-  document.getElementById('camResultLabel').textContent='인식된 상품명 (수정 가능)';
-  camBarcode='';
-  document.getElementById('camStatus').textContent=camMode==='barcode'?'카메라를 바코드에 가져다 대세요':'상품을 화면에 맞추고 촬영하세요';
-  if(camMode==='barcode'&&'BarcodeDetector' in window)startBarcodeScan();
+document.getElementById('camRescanBtn').addEventListener('click', () => {
+  document.getElementById('camResultBox').hidden = true;
+  document.getElementById('camActionBar').hidden = false;
+  document.getElementById('camCaptureBtn').hidden = camMode === 'barcode' && 'BarcodeDetector' in window;
+  document.getElementById('camResultLabel').textContent = '인식된 상품명 (수정 가능)';
+  camBarcode = '';
+  document.getElementById('camStatus').textContent = camMode === 'barcode' ? '카메라를 바코드에 가져다 대세요' : '상품을 화면에 맞추고 촬영하세요';
+  if (camMode === 'barcode' && 'BarcodeDetector' in window) startBarcodeScan();
 });
-document.addEventListener('visibilitychange',()=>{if(document.hidden)closeCam();});
+document.addEventListener('visibilitychange', () => { if (document.hidden) closeCam(); });
 
 // ===== CARDS =====
-function newEmptyTransaction(ov){return Object.assign({type:'purchase',item:'',amount:0,qty:null,memo:'',date:todayStr()},ov||{});}
-function renderCards(transactions){const list=document.getElementById('cardList');list.innerHTML=transactions.map(t=>renderCardHTML(t)).join('');bindCardEvents();updateCardCount();}
-function renderCardHTML(t){const id=uid();return `<div class="trans-card" data-card-id="${id}" data-type="${t.type}"><div class="trans-card-head"><div class="type-row mini"><button class="type-btn" data-card-type="sales" ${t.type==='sales'?'data-active="1"':''}>매출</button><button class="type-btn" data-card-type="purchase" ${t.type==='purchase'?'data-active="1"':''}>매입</button><button class="type-btn" data-card-type="other" ${t.type==='other'?'data-active="1"':''}>기타</button></div><button class="card-del-btn" data-action="del">✕</button></div><div class="field-row"><input class="field-input" data-field="item" type="text" placeholder="품목명" value="${escapeHtml(t.item)}"></div><div class="field-grid"><input class="field-input" data-field="amount" type="number" inputmode="numeric" placeholder="금액(원)" value="${t.amount||''}"><input class="field-input" data-field="qty" type="number" inputmode="numeric" placeholder="수량(선택)" value="${t.qty!=null?t.qty:''}"></div><div class="field-grid"><input class="field-input" data-field="date" type="date" value="${t.date}"><input class="field-input" data-field="memo" type="text" placeholder="메모(선택)" value="${escapeHtml(t.memo)}"></div><button class="card-save-btn" data-action="save">저장</button></div>`;}
-function bindCardEvents(){document.querySelectorAll('.trans-card').forEach(card=>{card.querySelectorAll('[data-card-type]').forEach(btn=>{if(btn.hasAttribute('data-active'))btn.classList.add('active');btn.addEventListener('click',()=>{const t=btn.dataset.cardType;card.dataset.type=t;card.querySelectorAll('[data-card-type]').forEach(b=>b.classList.toggle('active',b.dataset.cardType===t));});});card.querySelector('[data-action="del"]').addEventListener('click',()=>{card.remove();updateCardCount();checkEmpty();});card.querySelector('[data-action="save"]').addEventListener('click',()=>{if(saveCard(card)){card.remove();updateCardCount();checkEmpty();}});});}
-function saveCard(card){const type=card.dataset.type,get=f=>card.querySelector(`[data-field="${f}"]`).value,item=get('item').trim(),amount=parseInt(get('amount'),10),qtyRaw=get('qty'),qty=qtyRaw===''?null:parseInt(qtyRaw,10);if(!item){showToast('품목명을 입력하세요');return false;}if(!amount||isNaN(amount)||amount<=0){showToast('금액을 입력하세요');return false;}state.records.unshift({id:Date.now()+Math.floor(Math.random()*1000),type,item,amount,qty:(qty==null||isNaN(qty))?null:qty,date:get('date')||todayStr(),memo:get('memo').trim()});saveRecords();updateTopbar();showToast('✓ 저장됨');return true;}
-function updateCardCount(){document.getElementById('cardCount').textContent=document.querySelectorAll('.trans-card').length;}
-function checkEmpty(){if(!document.querySelectorAll('.trans-card').length)setStep(1);}
-document.getElementById('saveAllBtn').addEventListener('click',()=>{let saved=0;Array.from(document.querySelectorAll('.trans-card')).forEach(card=>{if(saveCard(card)){card.remove();saved++;}});updateCardCount();if(saved>0&&!document.querySelectorAll('.trans-card').length)setStep(1);});
-document.getElementById('cancelAllBtn').addEventListener('click',()=>{if(confirm('저장하지 않고 처음으로 돌아갈까요?'))setStep(1);});
-document.getElementById('addEmptyCardBtn').addEventListener('click',()=>{const list=document.getElementById('cardList'),wrap=document.createElement('div');wrap.innerHTML=renderCardHTML(newEmptyTransaction());list.appendChild(wrap.firstElementChild);bindCardEvents();updateCardCount();});
+function newEmptyTransaction(ov) { return Object.assign({type:'purchase',item:'',amount:0,qty:null,memo:'',date:todayStr()},ov||{}); }
+function renderCards(transactions) { const list=document.getElementById('cardList'); list.innerHTML=transactions.map(t=>renderCardHTML(t)).join(''); bindCardEvents(); updateCardCount(); }
+function renderCardHTML(t) {
+  const id = uid();
+  return `<div class="trans-card" data-card-id="${id}" data-type="${t.type}">
+    <div class="trans-card-head">
+      <div class="type-row mini">
+        <button class="type-btn" data-card-type="sales" ${t.type==='sales'?'data-active="1"':''}>매출</button>
+        <button class="type-btn" data-card-type="purchase" ${t.type==='purchase'?'data-active="1"':''}>매입</button>
+        <button class="type-btn" data-card-type="other" ${t.type==='other'?'data-active="1"':''}>기타</button>
+      </div>
+      <button class="card-del-btn" data-action="del">✕</button>
+    </div>
+    <div class="field-row"><input class="field-input" data-field="item" type="text" placeholder="품목명" value="${escapeHtml(t.item)}"></div>
+    <div class="field-grid">
+      <input class="field-input" data-field="amount" type="number" inputmode="numeric" placeholder="금액(원)" value="${t.amount||''}">
+      <input class="field-input" data-field="qty" type="number" inputmode="numeric" placeholder="수량(선택)" value="${t.qty!=null?t.qty:''}">
+    </div>
+    <div class="field-grid">
+      <input class="field-input" data-field="date" type="date" value="${t.date}">
+      <input class="field-input" data-field="memo" type="text" placeholder="메모(선택)" value="${escapeHtml(t.memo)}">
+    </div>
+    <button class="card-save-btn" data-action="save">저장</button>
+  </div>`;
+}
+function bindCardEvents() {
+  document.querySelectorAll('.trans-card').forEach(card => {
+    card.querySelectorAll('[data-card-type]').forEach(btn => {
+      if (btn.hasAttribute('data-active')) btn.classList.add('active');
+      btn.addEventListener('click', () => { const t=btn.dataset.cardType; card.dataset.type=t; card.querySelectorAll('[data-card-type]').forEach(b=>b.classList.toggle('active',b.dataset.cardType===t)); });
+    });
+    card.querySelector('[data-action="del"]').addEventListener('click', () => { card.remove(); updateCardCount(); checkEmpty(); });
+    card.querySelector('[data-action="save"]').addEventListener('click', () => { if (saveCard(card)) { card.remove(); updateCardCount(); checkEmpty(); } });
+  });
+}
+function saveCard(card) {
+  const type=card.dataset.type, get=f=>card.querySelector(`[data-field="${f}"]`).value;
+  const item=get('item').trim(), amount=parseInt(get('amount'),10), qtyRaw=get('qty'), qty=qtyRaw===''?null:parseInt(qtyRaw,10);
+  if (!item) { showToast('품목명을 입력하세요'); return false; }
+  if (!amount||isNaN(amount)||amount<=0) { showToast('금액을 입력하세요'); return false; }
+  state.records.unshift({id:Date.now()+Math.floor(Math.random()*1000),type,item,amount,qty:(qty==null||isNaN(qty))?null:qty,date:get('date')||todayStr(),memo:get('memo').trim()});
+  saveRecords(); updateTopbar(); showToast('✓ 저장됨'); return true;
+}
+function updateCardCount() { document.getElementById('cardCount').textContent=document.querySelectorAll('.trans-card').length; }
+function checkEmpty() { if (!document.querySelectorAll('.trans-card').length) setStep(1); }
+document.getElementById('saveAllBtn').addEventListener('click', () => { let saved=0; Array.from(document.querySelectorAll('.trans-card')).forEach(card=>{if(saveCard(card)){card.remove();saved++;}}); updateCardCount(); if(saved>0&&!document.querySelectorAll('.trans-card').length)setStep(1); });
+document.getElementById('cancelAllBtn').addEventListener('click', () => { if (confirm('저장하지 않고 처음으로 돌아갈까요?')) setStep(1); });
+document.getElementById('addEmptyCardBtn').addEventListener('click', () => { const list=document.getElementById('cardList'),wrap=document.createElement('div'); wrap.innerHTML=renderCardHTML(newEmptyTransaction()); list.appendChild(wrap.firstElementChild); bindCardEvents(); updateCardCount(); });
 
 // ===== TOPBAR =====
-function updateTopbar(){const d=new Date(),days=['일','월','화','수','목','금','토'];document.getElementById('topbarDate').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;const today=todayStr(),tr=state.records.filter(r=>r.date===today),sales=tr.filter(r=>r.type==='sales').reduce((s,r)=>s+r.amount,0),purchase=tr.filter(r=>r.type==='purchase').reduce((s,r)=>s+r.amount,0),other=tr.filter(r=>r.type==='other').reduce((s,r)=>s+r.amount,0);document.getElementById('sumSales').textContent='₩'+fmtShort(sales);document.getElementById('sumPurchase').textContent='₩'+fmtShort(purchase);document.getElementById('sumProfit').textContent='₩'+fmtShort(sales-purchase-other);}
+function updateTopbar() {
+  const d=new Date(), days=['일','월','화','수','목','금','토'];
+  document.getElementById('topbarDate').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+  const today=todayStr(), tr=state.records.filter(r=>r.date===today);
+  const sales=tr.filter(r=>r.type==='sales').reduce((s,r)=>s+r.amount,0);
+  const purchase=tr.filter(r=>r.type==='purchase').reduce((s,r)=>s+r.amount,0);
+  const other=tr.filter(r=>r.type==='other').reduce((s,r)=>s+r.amount,0);
+  document.getElementById('sumSales').textContent='₩'+fmtShort(sales);
+  document.getElementById('sumPurchase').textContent='₩'+fmtShort(purchase);
+  document.getElementById('sumProfit').textContent='₩'+fmtShort(sales-purchase-other);
+}
 
 // ===== LIST =====
-const typeLabel={sales:'매출',purchase:'매입',other:'기타'};
-function renderList(){const list=state.filter==='all'?state.records:state.records.filter(r=>r.type===state.filter),el=document.getElementById('recordList');if(!list.length){el.innerHTML='<div class="empty">아직 등록된 내역이 없습니다</div>';return;}const sorted=[...list].sort((a,b)=>b.id-a.id);el.innerHTML=sorted.map(r=>`<div class="record"><div class="record-left"><div class="record-title"><span class="record-tag ${r.type}">${typeLabel[r.type]}</span>${escapeHtml(r.item)}</div><div class="record-meta">${r.date}${r.qty?' · '+r.qty+'개':''}</div>${r.memo?`<div class="record-memo">${escapeHtml(r.memo)}</div>`:''}</div><div class="record-right"><div class="record-amount ${r.type}">${r.type==='sales'?'+':'-'}${fmt(r.amount).slice(1)}</div><button class="record-del" data-id="${r.id}">삭제</button></div></div>`).join('');el.querySelectorAll('.record-del').forEach(b=>{b.addEventListener('click',()=>{if(!confirm('이 내역을 삭제하시겠습니까?'))return;state.records=state.records.filter(r=>r.id!==parseInt(b.dataset.id,10));saveRecords();renderList();updateTopbar();});});}
+const typeLabel = {sales:'매출',purchase:'매입',other:'기타'};
+function renderList() {
+  const list=state.filter==='all'?state.records:state.records.filter(r=>r.type===state.filter);
+  const el=document.getElementById('recordList');
+  if (!list.length) { el.innerHTML='<div class="empty">아직 등록된 내역이 없습니다</div>'; return; }
+  const sorted=[...list].sort((a,b)=>b.id-a.id);
+  el.innerHTML=sorted.map(r=>`<div class="record"><div class="record-left"><div class="record-title"><span class="record-tag ${r.type}">${typeLabel[r.type]}</span>${escapeHtml(r.item)}</div><div class="record-meta">${r.date}${r.qty?' · '+r.qty+'개':''}</div>${r.memo?`<div class="record-memo">${escapeHtml(r.memo)}</div>`:''}</div><div class="record-right"><div class="record-amount ${r.type}">${r.type==='sales'?'+':'-'}${fmt(r.amount).slice(1)}</div><button class="record-del" data-id="${r.id}">삭제</button></div></div>`).join('');
+  el.querySelectorAll('.record-del').forEach(b=>{b.addEventListener('click',()=>{if(!confirm('이 내역을 삭제하시겠습니까?'))return;state.records=state.records.filter(r=>r.id!==parseInt(b.dataset.id,10));saveRecords();renderList();updateTopbar();});});
+}
 document.querySelectorAll('.filter-chip').forEach(c=>{c.addEventListener('click',()=>{state.filter=c.dataset.filter;document.querySelectorAll('.filter-chip').forEach(x=>x.classList.toggle('active',x===c));renderList();});});
 
 // ===== STATS =====
@@ -636,13 +747,14 @@ function renderByItem(){const items={};state.records.forEach(r=>{if(r.type==='ot
 function renderOther(){const others=state.records.filter(r=>r.type==='other');if(!others.length){document.getElementById('statContent').innerHTML='<div class="empty">기타비용 내역이 없습니다</div>';return;}const grouped={};others.forEach(r=>{if(!grouped[r.item])grouped[r.item]={name:r.item,amount:0,count:0};grouped[r.item].amount+=r.amount;grouped[r.item].count++;});const arr=Object.values(grouped).sort((a,b)=>b.amount-a.amount),total=arr.reduce((s,a)=>s+a.amount,0);document.getElementById('statContent').innerHTML=`<div class="stat-cards"><div class="stat-card"><div class="stat-card-label">기타비용 합계</div><div class="stat-card-value purchase">${fmt(total)}</div></div><div class="stat-card"><div class="stat-card-label">항목 수</div><div class="stat-card-value">${arr.length}개</div></div></div><div class="card"><div class="card-title">항목별 비중</div>${arr.map(a=>{const pct=total>0?(a.amount/total)*100:0;return`<div class="other-row"><div class="other-row-left"><div class="other-name">${escapeHtml(a.name)} <span style="color:var(--c-text-dim);font-size:11px">(${a.count}건)</span></div><div class="other-pct-bar"><div class="other-pct-fill" style="width:${pct}%"></div></div></div><div style="text-align:right"><div class="other-amount">${fmt(a.amount)}</div><div class="other-pct">${pct.toFixed(1)}%</div></div></div>`;}).join('')}</div>`;}
 
 // ===== SETTINGS =====
-document.getElementById('clearBtn').addEventListener('click',()=>{if(!confirm('모든 데이터를 삭제하시겠습니까?\n복구할 수 없습니다.'))return;state.records=[];saveRecords();updateTopbar();showToast('데이터가 삭제되었습니다');});
-document.getElementById('exportBtn').addEventListener('click',()=>{const blob=new Blob([JSON.stringify(state.records,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`sales-data-${todayStr()}.json`;a.click();URL.revokeObjectURL(url);showToast('✓ 내보내기 완료');});
+document.getElementById('clearBtn').addEventListener('click', () => { if (!confirm('모든 데이터를 삭제하시겠습니까?\n복구할 수 없습니다.')) return; state.records=[]; saveRecords(); updateTopbar(); showToast('데이터가 삭제되었습니다'); });
+document.getElementById('exportBtn').addEventListener('click', () => { const blob=new Blob([JSON.stringify(state.records,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a'); a.href=url; a.download=`sales-data-${todayStr()}.json`; a.click(); URL.revokeObjectURL(url); showToast('✓ 내보내기 완료'); });
 
 // ===== INIT =====
-document.getElementById('dataCount').textContent=state.records.length+'건';
-updateTopbar();setStep(1);
-if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+document.getElementById('dataCount').textContent = state.records.length + '건';
+updateTopbar();
+setStep(1);
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
 </script>
 </body>
 </html>
