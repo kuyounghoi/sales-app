@@ -1,4 +1,4 @@
-const CACHE = 'sales-app-v4';
+const CACHE = 'sales-app-v5';
 const ASSETS = [
   '/sales-app/',
   '/sales-app/index.html',
