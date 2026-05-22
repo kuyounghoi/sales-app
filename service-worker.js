@@ -23,9 +23,7 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // API 호출은 캐시하지 않음
   if (e.request.url.includes('anthropic.com')) return;
-
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
